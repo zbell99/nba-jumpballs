@@ -6,11 +6,15 @@ This is version one of the jump ball repository. The goal of this project is to 
 
 ```
 src/
-├── data_processing/
-│   ├── __init__.py
-│   └── jumpball_pbp.py       # NBA play-by-play data processing and jumpball extraction
 ├── data_exploration/
 │   └── jumpball_explo.py      # Data inspection and cleaning utilities
+├── data_processing/
+│   ├── __init__.py
+│   ├── jumpball_pbp.py        # NBA play-by-play data processing and jumpball extraction
+│   ├── filter_jumpball_data.py # Data cleaning and deduplication pipeline
+│   └── player_data.py         # Player metadata enrichment
+├── helpers/
+│   └── plotting_helpers.py     # Visualization utilities
 ├── __init__.py
 .github/
 └── skills/                     # Custom workflow skills
@@ -31,9 +35,14 @@ src/
 
 ## Pipeline
 
-**Data Processing** (`src/data_processing/`): Downloads NBA play-by-play data from SportsDataverse and extracts jumpball events (seasons 2002-2026). Classifies jumpballs as start-of-game, start-of-overtime, or in-game. Output: `data/jumpballs.csv`
+**Data Processing** (`src/data_processing/`):
+- `jumpball_pbp.py`: Downloads NBA play-by-play data from SportsDataverse and extracts jumpball events (seasons 2002-2026). Classifies jumpballs as start-of-game, start-of-overtime, or in-game. Output: `data/jumpballs.csv`
+- `player_data.py`: Loads and processes player metadata (height, weight, position)
+- `filter_jumpball_data.py`: Cleans jumpball data by removing violations, deduplicating sparse rows, and enriching with player/team metadata. Output: `data/filtered-jumpballs.csv`
 
 **Data Exploration** (`src/data_exploration/`): Inspects, cleans, and visualizes jumpball data. Detects data quality issues, removes duplicates and anomalies, and generates analysis visualizations.
+
+**Helpers** (`src/helpers/`): Provides reusable utilities like visualization helpers for analysis plots.
 
 ## Usage
 

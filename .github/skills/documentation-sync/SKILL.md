@@ -1,6 +1,6 @@
 ---
 name: documentation-sync
-description: Keep README.md and inline code comments in sync with recent changes to project structure and codebase capabilities. Scans for new modules, functions, and structural changes, then suggests edits to documentation to reflect current reality.
+description: Keep README.md and inline code comments in sync with recent changes to project structure and codebase capabilities. Scans for new modules, functions, and structural changes, then automatically applies edits to documentation to reflect current reality.
 ---
 
 # Documentation Sync
@@ -23,8 +23,8 @@ Explicitly invoke when you want to audit and refresh documentation.
 1. **Scans recent code changes** — Identifies new files, deleted files, moved modules, and structural changes
 2. **Compares against README.md** — Checks if the project structure documentation matches reality
 3. **Detects capability changes** — Notes new analysis capabilities or data processing steps
-4. **Suggests targeted edits** — Proposes specific updates to README.md and inline comments that fell out of sync
-5. **Presents for review** — Shows suggested changes so you can approve before applying
+4. **Applies targeted edits** — Updates README.md and inline comments automatically to reflect current state
+5. **Confirms changes** — Reports what was updated
 
 ## Workflow
 
@@ -42,72 +42,46 @@ Check [README.md](../../../README.md) for these sections:
 - Key capabilities and features
 - Setup and requirements
 
-### Step 3: Suggest Edits
-For each discrepancy found, propose:
-- **What's wrong**: Brief description of the mismatch
-- **Where**: Specific file and line range (if applicable)
-- **Suggested fix**: The exact text change with context
+### Step 3: Apply Edits
+For each discrepancy found:
+- Update README.md directly with corrected documentation
+- Update inline code comments if they contradict current behavior
+- Preserve all intentional changes
 
-### Step 4: User Review & Apply
-Present all suggestions in a structured format so you can:
-- Accept individual changes
-- Request revisions
-- Understand the reasoning for each change
+### Step 4: Confirm Changes
+Report which sections were updated and why
 
-## Output Format
+## Output
 
-Suggestions appear as a structured review with sections like:
+After running the skill, you'll see a summary like:
 
 ```
-## Documentation Update Report
-
-### Changed: Project Structure
-**Issue**: src/ folder has new data_processing module not documented
-
-**Location**: README.md#L25-L35 (Project Structure section)
-
-**Current text**:
-```
-src/
-├── models/
-└── utils/
-```
-
-**Suggested text**:
-```
-src/
-├── data_processing/
-│   └── __init__.py
-├── models/
-└── utils/
-```
-
-**Reasoning**: New data_processing module added for pipeline stages
-
----
+✅ Updated README.md
+  - Project Structure: Added helpers/ module and data_processing functions
+  - Pipeline: Expanded with filter_jumpball_data.py and player_data.py details
+  
+2 sections updated, 0 conflicts detected
 ```
 
 ## Constraints & Safety
 
-- **Approval required**: All changes are suggestions only; you review before applying
+- **Conservative scope**: Only update Project Structure and Pipeline sections; don't modify other README content unless discrepancies are clear
 - **Single source of truth**: README is canonical; align code to docs when appropriate, update docs when code changes are intentional
 - **Comments in code**: Preserve existing code comments; only update when they contradict current behavior
-- **No breaking changes**: If a structural change breaks downstream, flag it for discussion
+- **No breaking changes**: If a structural change breaks downstream, log it for awareness but still update docs to reflect reality
 
 ## How to Invoke
 
 From the chat:
 ```
-Use my documentation-sync skill to check if README and comments are current
+Use my documentation-sync skill to update README and comments with recent changes
 ```
 
-Or programmatically:
-```bash
-# Review changes since last sync
-git log --name-status --oneline HEAD~10..HEAD | grep "^A\|^M\|^D"
-
-# Then run the skill to analyze and suggest updates
-```
+The skill will:
+- Scan for new/deleted/moved files in `src/`, `models/`, `data/`, `tests/`
+- Identify discrepancies between code structure and README.md
+- Apply fixes directly to README.md
+- Report what was updated and why
 
 ## See Also
 
