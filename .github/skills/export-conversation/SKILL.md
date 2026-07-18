@@ -29,7 +29,7 @@ Invoke this skill when:
 Each exported conversation includes:
 
 ```
-**Date**: YYYY-MM-DD HH:MM:SS (UTC)
+**Date**: YYYY-MM-DD HH:MM:SS (ET)
 **Branch**: branch-name
 **Summary**: keyword-one keyword-two
 ```
@@ -46,7 +46,7 @@ Ask to export the conversation when you want to preserve work. Example prompts:
 
 ### Step 2: Confirm Metadata
 The skill will:
-- Generate a timestamp (used as the primary sort key in filename)
+- Generate a timestamp in ET (used as the primary sort key in filename)
 - Detect the current git branch (using `git rev-parse --abbrev-ref HEAD`)
 - Show the proposed filename for your confirmation
 
