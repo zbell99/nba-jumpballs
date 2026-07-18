@@ -9,6 +9,8 @@ src/
 ├── data_processing/
 │   ├── __init__.py
 │   └── jumpball_pbp.py       # NBA play-by-play data processing and jumpball extraction
+├── data_exploration/
+│   └── jumpball_explo.py      # Data inspection and cleaning utilities
 ├── __init__.py
 models/                         # Model training and analysis (planned)
 tests/
@@ -46,6 +48,16 @@ The main pipeline is in `src/data_processing/jumpball_pbp.py`:
   - `in-game`: All other jumpballs
 
 **Output**: Processes seasons 2002-2026 and saves results to `data/jumpballs.csv`
+
+### Data Exploration & Cleaning
+
+The `src/data_exploration/jumpball_explo.py` module provides utilities for inspecting raw data quality:
+
+- **`inspect_empty_rows(df)`**: Identifies rows with missing athlete data or anomalous patterns
+- **`inspect_dupes(df)`**: Detects consecutive game plays (data errors) and anomalies
+- **`collect_dupes(df)`**: Collects all groups of consecutive plays for systematic review
+
+Use these to validate and clean raw PBP data before processing.
 
 ## Usage
 
