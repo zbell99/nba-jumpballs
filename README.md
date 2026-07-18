@@ -12,12 +12,6 @@ src/
 ├── data_exploration/
 │   └── jumpball_explo.py      # Data inspection and cleaning utilities
 ├── __init__.py
-models/                         # Model training and analysis (planned)
-tests/
-├── unit/                       # Unit tests
-└── __init__.py
-data/
-├── jumpballs.csv              # Processed jumpball events
 .github/
 └── skills/                     # Custom workflow skills
 ```
@@ -35,35 +29,18 @@ data/
    pip install -r requirements.txt
    ```
 
-## Data Pipeline
+## Pipeline
 
-### Processing NBA Jumpballs
+**Data Processing** (`src/data_processing/`): Downloads NBA play-by-play data from SportsDataverse and extracts jumpball events (seasons 2002-2026). Classifies jumpballs as start-of-game, start-of-overtime, or in-game. Output: `data/jumpballs.csv`
 
-The main pipeline is in `src/data_processing/jumpball_pbp.py`:
-
-- **`download_nba_pbp(seasons, return_as_pandas=True)`**: Downloads NBA play-by-play data from SportsDataverse (seasons >= 2002)
-- **`process_jumpball_pbp()`**: Filters for jumpball events and classifies them as:
-  - `start-of-game`: Opening tip (game_play_number ≤ 2)
-  - `start-of-ot`: Overtime tips (period ≥ 5, clock at 5:00)
-  - `in-game`: All other jumpballs
-
-**Output**: Processes seasons 2002-2026 and saves results to `data/jumpballs.csv`
-
-### Data Exploration & Cleaning
-
-The `src/data_exploration/jumpball_explo.py` module provides utilities for inspecting raw data quality:
-
-- **`inspect_empty_rows(df)`**: Identifies rows with missing athlete data or anomalous patterns
-- **`inspect_dupes(df)`**: Detects consecutive game plays (data errors) and anomalies
-- **`collect_dupes(df)`**: Collects all groups of consecutive plays for systematic review
-
-Use these to validate and clean raw PBP data before processing.
+**Data Exploration** (`src/data_exploration/`): Inspects, cleans, and visualizes jumpball data. Detects data quality issues, removes duplicates and anomalies, and generates analysis visualizations.
 
 ## Usage
 
-Run the jumpball processing pipeline:
 ```bash
+# Generate jumpball dataset
 python src/data_processing/jumpball_pbp.py
-```
 
-This generates `data/jumpballs.csv` with classifications and prints summary statistics.
+# Analyze and visualize
+python src/data_exploration/jumpball_explo.py
+```
