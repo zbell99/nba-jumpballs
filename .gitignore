@@ -1,0 +1,7 @@
+jumpball-venv/
+
+*.pyc
+__pycache__/
+
+data/
+models/

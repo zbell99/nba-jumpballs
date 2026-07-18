@@ -1,0 +1,23 @@
+{
+  "skill_name": "documentation-sync",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use my documentation-sync skill to check if the README and code comments match the current project structure",
+      "expected_output": "A structured report showing what's out of sync in README.md, with specific sections that need updating and suggested text changes for the user to review",
+      "context": "First sync after initial project setup, should identify any gaps between documented and actual structure"
+    },
+    {
+      "id": 2,
+      "prompt": "Run documentation-sync to ensure our project description and capabilities are current",
+      "expected_output": "Suggestions for updating README descriptions of data processing pipeline, analysis capabilities, and any new module documentation",
+      "context": "Sync after adding features, captures capability changes"
+    },
+    {
+      "id": 3,
+      "prompt": "Use documentation-sync to find what inline code comments are stale or misleading",
+      "expected_output": "Identified comments in src/ or models/ that contradict current behavior, with suggestions for updating them",
+      "context": "Identifies documentation debt in code itself"
+    }
+  ]
+}
