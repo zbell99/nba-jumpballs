@@ -1,0 +1,23 @@
+{
+  "skill_name": "export-conversation",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Export this conversation with summary 'skill-creation'",
+      "expected_output": "A new markdown file created in copilot-conversations/ with filename pattern YYYY-MM-DD_HHMMSS_SUMMARY_BRANCH.md, containing a metadata header with timestamp, current git branch, and summary, followed by the full conversation transcript",
+      "context": "Basic export flow: capture conversation, add metadata, save with proper naming convention"
+    },
+    {
+      "id": 2,
+      "prompt": "Use export-conversation skill to preserve this debugging session as 'bug-fix'",
+      "expected_output": "Successfully exported conversation with correct branch name detected, timestamp applied at the beginning of filename, and summary 'bug-fix'. File should be discoverable and properly ordered by date/time in copilot-conversations/",
+      "context": "Verify that git branch is correctly detected and metadata accurately reflects the current working state"
+    },
+    {
+      "id": 3,
+      "prompt": "Save this as 'feature-auth' in copilot-conversations with the export-conversation skill",
+      "expected_output": "Exported file with metadata header showing current date, current branch (main or feature branch), and summary 'feature-auth'. Filename starts with timestamp for proper chronological ordering. User can retrieve and review the full conversation transcript later",
+      "context": "Ensures exported conversations are persistent, properly labeled, and serve as reference for future sessions or team members"
+    }
+  ]
+}
