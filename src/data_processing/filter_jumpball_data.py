@@ -3,6 +3,7 @@ import pandas as pd
 JUMPBALL_DATA_PATH = "data/jumpballs.csv"
 PLAYER_DATA_PATH = "data/draft_data.csv"
 GAME_ROSTERS_PATH = "data/game_rosters.csv"
+WIN_PROB_PATH = "data/wpa_challenge_values_sim.parquet" #dataset derived from inpredictable.com to estimate value of winning a challenge
 
 
 def inspect_empty_rows(df):
@@ -210,6 +211,45 @@ def merge_player_data(df, player_data, game_data):
     return df
 
 
+def merge_win_prob_data(df):
+    """
+    Merge win probability data into the jumpball DataFrame to get the estimated value of winning a challenge.
+    This function merges the jumpball DataFrame with win probability data to enrich the dataset with additional information about the potential impact of each jumpball event on the game's outcome.
+    """
+    def calculate_time_elapsed(row):
+        period_time = min(row['period']-1,3) * 12 * 60 #assuming 12-minute periods, 5 min in OT equivalent to 5 min left in 4th quarter
+        quarter_mins = (12 - row['clock_minutes'] - 1) * 60
+        quarter_secs = 60 - row['clock_seconds']
+        return period_time + quarter_mins + quarter_secs
+    
+    def clip_value(value, lower=-20, upper=20):
+        return int(max(lower, min(upper, value)))
+    
+    
+    df['time_elapsed'] = df.apply(calculate_time_elapsed, axis=1)
+    df['time_rounded'] = df['time_elapsed'].apply(lambda x: ((x // 45.0) + 1) * 45) #round up to nearest 45 seconds to match with win prob data
+    df['score_diff'] = df['home_score'] - df['away_score']
+    df['score_diff_clipped'] = df['score_diff'].apply(clip_value, lower=-20, upper=20)
+    df['spread_clipped'] = df['home_team_spread'].apply(clip_value, lower=-15, upper=15)
+
+    win_prob_data = pd.read_parquet(WIN_PROB_PATH)
+
+    print(win_prob_data['line'].value_counts())  # Check for unique values in 'line'
+    print(win_prob_data['m'].value_counts())     # Check for unique values in 'm'
+
+    df = df.merge(
+        win_prob_data[['gt', 'm', 'line', 'oob_challenge']],
+        how='left',
+        left_on=['time_rounded', 'score_diff_clipped', 'spread_clipped'],
+        right_on=['gt', 'm', 'line']
+    )
+
+    df['wp_leverage'] = round(df['oob_challenge'] / 2, 4)
+    df = df.drop(columns=['gt', 'm', 'line', 'oob_challenge', 'time_elapsed', 'time_rounded', 'score_diff_clipped', 'spread_clipped'])
+    
+    return df
+
+
 def main():
     jumpball_df = pd.read_csv(JUMPBALL_DATA_PATH)
     player_data = pd.read_csv(PLAYER_DATA_PATH)
@@ -230,10 +270,13 @@ def main():
     print(f"Total rows after cleaning violations: {len(final_df)}\n")
 
     # Merge player data to get athlete teams and metadata
-    merged_df = merge_player_data(final_df, player_data, game_data)
-    print(f"Total rows after merging player data: {len(merged_df)}\n")
+    final_df = merge_player_data(final_df, player_data, game_data)
+    print(f"Total rows after merging player data: {len(final_df)}\n")
 
-    merged_df.to_csv("data/filtered-jumpballs.csv", index=False)
+    final_df = merge_win_prob_data(final_df)
+    print(f"Total rows after merging win probability data: {len(final_df)}\n")
+
+    final_df.to_csv("data/filtered-jumpballs.csv", index=False)
 
 
 if __name__ == "__main__":
