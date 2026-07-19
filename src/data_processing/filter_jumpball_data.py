@@ -265,14 +265,26 @@ def determine_jumpball_winner(df):
                 return None  # Unknown winner, athlete_id_3 does not match either team
 
     def get_result(row):
+        # Determine winner and loser positions by mapping athlete_3 to athlete_1 or athlete_2
+        winner_pos = None
+        loser_pos = None
+        
+        if pd.notna(row['athlete_id_3']):
+            if row['team_id_3'] == row['team_id_1']:
+                winner_pos = row['athlete_position_1']
+                loser_pos = row['athlete_position_2']
+            elif row['team_id_3'] == row['team_id_2']:
+                winner_pos = row['athlete_position_2']
+                loser_pos = row['athlete_position_1']
+        
         if row['home_won_jumpball'] is True:
-            return row['home_team_id'], row['away_team_id'], row['home_team_name'], row['away_team_name']
+            return row['home_team_id'], row['away_team_id'], row['home_team_name'], row['away_team_name'], winner_pos, loser_pos
         elif row['home_won_jumpball'] is False: 
-            return row['away_team_id'], row['home_team_id'], row['away_team_name'], row['home_team_name']
-        return None, None, None, None  # If we don't know who won, return None for all
+            return row['away_team_id'], row['home_team_id'], row['away_team_name'], row['home_team_name'], winner_pos, loser_pos
+        return None, None, None, None, None, None  # If we don't know who won, return None for all
            
     df['home_won_jumpball'] = df.apply(home_winner, axis=1)
-    df[['jumpball_winner_id', 'jumpball_loser_id', 'jumpball_winner_team', 'jumpball_loser_team']] = df.apply(get_result, axis=1, result_type='expand')
+    df[['jumpball_winner_id', 'jumpball_loser_id', 'jumpball_winner_team', 'jumpball_loser_team', 'jumpball_winner_pos', 'jumpball_loser_pos']] = df.apply(get_result, axis=1, result_type='expand')
 
     # count the number of times jumpball winner is not equal to winning_team_id assuming jumpball_winner_id is populated correctly
     # mismatch_count = df[~df['jumpball_winner_id'].isna() & (df['jumpball_winner_id'] != df['winning_team_id'])].shape[0]

@@ -161,7 +161,115 @@ def chart_team_jumpball_winrate(df):
     plt.savefig("data/team_jumpball_winrate.png", dpi=150, bbox_inches='tight')
     
 
+def chart_positional_jumpball_winrate(df):
+    """
+    Display a table of jumpball win rates across different positions.
+    Aggregated across all seasons. Shows % of total jumpballs and winrate for each matchup.
+    """
 
+    start_jumpballs = df.copy()
+
+    # Define position matchups
+    matchups = {
+        'GvG': ('G', 'G'),
+        'GvF': ('G', 'F'),
+        'GvC': ('G', 'C'),
+        'FvF': ('F', 'F'),
+        'FvC': ('F', 'C'),
+        'CvC': ('C', 'C')
+    }
+
+    position_mapping = {
+        'G': {'PG', 'SG', 'G'},
+        'F': {'SF', 'PF', 'F'},
+        'C': {'C'}
+    }
+    
+    # Reverse mapping: from individual position to category
+    position_to_category = {}
+    for category, positions in position_mapping.items():
+        for pos in positions:
+            position_to_category[pos] = category
+
+    results = []
+    total_jumpballs = 0
+    
+    for label, (pos1, pos2) in matchups.items():
+        matchup_data = start_jumpballs[
+            ((start_jumpballs['athlete_position_1'].isin(position_mapping[pos1])) & (start_jumpballs['athlete_position_2'].isin(position_mapping[pos2]))) |
+            ((start_jumpballs['athlete_position_1'].isin(position_mapping[pos2])) & (start_jumpballs['athlete_position_2'].isin(position_mapping[pos1])))
+        ]
+        
+        # Filter out rows where jumpball_winner_pos is null
+        matchup_data = matchup_data.dropna(subset=['jumpball_winner_pos'])
+        
+        # Map winner positions to categories
+        matchup_data = matchup_data.copy()
+        matchup_data['winner_position_category'] = matchup_data['jumpball_winner_pos'].map(position_to_category)
+        
+        total = len(matchup_data)
+        total_jumpballs += total
+        
+        # Count how many times position_1 won
+        pos1_wins = (matchup_data['winner_position_category'] == pos1).sum()
+        winrate = pos1_wins / total if total > 0 else 0
+        
+        results.append({
+            'matchup': label,
+            'count': total,
+            'pos1_wins': pos1_wins,
+            'winrate': winrate
+        })
+
+    results_df = pd.DataFrame(results)
+    results_df['pct_of_total'] = (results_df['count'] / total_jumpballs * 100).round(1)
+    results_df['winrate_pct'] = (results_df['winrate'] * 100).round(1)
+    
+    # Create table image
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.axis('tight')
+    ax.axis('off')
+    
+    # Prepare table data
+    table_data = []
+    table_data.append(['Matchup', 'Count', '% of Total', 'Winrate %'])
+    for _, row in results_df.iterrows():
+        matchup = row['matchup']
+        # Show dashes for same-position matchups
+        if matchup in ['GvG', 'FvF', 'CvC']:
+            winrate_display = "--"
+        else:
+            winrate_display = f"{row['winrate_pct']:.1f}"
+        table_data.append([
+            matchup,
+            str(row['count']),
+            f"{row['pct_of_total']:.1f}",
+            winrate_display
+        ])
+    
+    table = ax.table(cellText=table_data, cellLoc='center', loc='center',
+                     colWidths=[0.2, 0.2, 0.2, 0.2])
+    table.auto_set_font_size(False)
+    table.set_fontsize(11)
+    table.scale(1, 2.5)
+    
+    # Style header row
+    for i in range(4):
+        table[(0, i)].set_facecolor('#4CAF50')
+        table[(0, i)].set_text_props(weight='bold', color='white')
+    
+    # Style data rows with alternating colors
+    for i in range(1, len(table_data)):
+        for j in range(4):
+            if i % 2 == 0:
+                table[(i, j)].set_facecolor('#f0f0f0')
+            else:
+                table[(i, j)].set_facecolor('#ffffff')
+    
+    plt.title('Positional Jumpball Analysis (Aggregated Across All Seasons)', 
+              fontsize=14, weight='bold', pad=20)
+    plt.savefig("data/positional_jumpball_winrate.png", dpi=150, bbox_inches='tight')
+    print("\nTable saved to data/positional_jumpball_winrate.png")   
 
 def main():
     df = pd.read_csv("data/filtered-jumpballs.csv")
@@ -169,7 +277,8 @@ def main():
 
     # plot_jumpballs_per_game_per_season(df)
     # chart_team_jumpball_player_variance(df)
-    chart_team_jumpball_winrate(df)
+    # chart_team_jumpball_winrate(df)
+    chart_positional_jumpball_winrate(df)
 
 
 if __name__ == "__main__":
