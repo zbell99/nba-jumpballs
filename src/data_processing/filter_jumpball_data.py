@@ -191,6 +191,7 @@ def merge_player_data(df, player_data, game_data):
     enriched_roster = enriched_roster.drop_duplicates(subset=['game_id', 'athlete_id'])
     
     # Now do 3 merges instead of 6
+    df = df.drop(columns=['team_id'])  # Drop to avoid confusion during merges -- this id value adds no value. I believe it was meant to signal the winner but is clearly noisy
     for athlete_num in [1, 2, 3]:
         athlete_id_col = f'athlete_id_{athlete_num}'
         df = df.merge(
@@ -234,9 +235,6 @@ def merge_win_prob_data(df):
 
     win_prob_data = pd.read_parquet(WIN_PROB_PATH)
 
-    print(win_prob_data['line'].value_counts())  # Check for unique values in 'line'
-    print(win_prob_data['m'].value_counts())     # Check for unique values in 'm'
-
     df = df.merge(
         win_prob_data[['gt', 'm', 'line', 'oob_challenge']],
         how='left',
@@ -246,6 +244,40 @@ def merge_win_prob_data(df):
 
     df['wp_leverage'] = round(df['oob_challenge'] / 2, 4)
     df = df.drop(columns=['gt', 'm', 'line', 'oob_challenge', 'time_elapsed', 'time_rounded', 'score_diff_clipped', 'spread_clipped'])
+    
+    return df
+
+
+def determine_jumpball_winner(df):
+    """
+    Determine the winner of each jumpball event in the DataFrame. This function adds a new column 'jumpball_winner' to the DataFrame, indicating which athlete won the jumpball event based on the 'text' column.
+    """
+    def home_winner(row):
+        if pd.isna(row['team_id_3']):
+            # If athlete_id_3 is NaN, we don't know who won possession
+            return None
+        else:
+            if row['team_id_3'] == row['home_team_id']:
+                return True  # Home team won the jumpball
+            elif row['team_id_3'] == row['away_team_id']:
+                return False  # Away team won the jumpball
+            else:
+                return None  # Unknown winner, athlete_id_3 does not match either team
+
+    def get_result(row):
+        if row['home_won_jumpball'] is True:
+            return row['home_team_id'], row['away_team_id'], row['home_team_name'], row['away_team_name']
+        elif row['home_won_jumpball'] is False: 
+            return row['away_team_id'], row['home_team_id'], row['away_team_name'], row['home_team_name']
+        return None, None, None, None  # If we don't know who won, return None for all
+           
+    df['home_won_jumpball'] = df.apply(home_winner, axis=1)
+    df[['jumpball_winner_id', 'jumpball_loser_id', 'jumpball_winner_team', 'jumpball_loser_team']] = df.apply(get_result, axis=1, result_type='expand')
+
+    # count the number of times jumpball winner is not equal to winning_team_id assuming jumpball_winner_id is populated correctly
+    # mismatch_count = df[~df['jumpball_winner_id'].isna() & (df['jumpball_winner_id'] != df['winning_team_id'])].shape[0]
+    # print(f"Number of mismatches between jumpball_winner_id and winning_team_id: {mismatch_count}") 
+    # there where 5254 mismatches, so the dataset was wrong to give us an additional team_id column. We need to use the id of the third player.
     
     return df
 
@@ -263,10 +295,15 @@ def main():
     cleaned_df = clean_dupes_by_sparsity(jumpball_df, consecutive_groups)
     rows_removed = len(jumpball_df) - len(cleaned_df)
     print(f"Rows removed due to sparsity: {rows_removed}\n")
+
+    # Clean rows with invalid teams
+    cleaned_teams_df = cleaned_df[(cleaned_df['home_team_id']<=30) & (cleaned_df['away_team_id']<=30)].copy()
+    rows_removed_invalid_teams = len(cleaned_df) - len(cleaned_teams_df)
+    print(f"Rows removed due to invalid teams: {rows_removed_invalid_teams}\n")
     
     # Clean rows containing 'violation'
-    final_df = clean_violations(cleaned_df)
-    rows_removed_violations = len(cleaned_df) - len(final_df)
+    final_df = clean_violations(cleaned_teams_df)
+    rows_removed_violations = len(cleaned_teams_df) - len(final_df)
     print(f"Total rows after cleaning violations: {len(final_df)}\n")
 
     # Merge player data to get athlete teams and metadata
@@ -276,7 +313,11 @@ def main():
     final_df = merge_win_prob_data(final_df)
     print(f"Total rows after merging win probability data: {len(final_df)}\n")
 
+    final_df = determine_jumpball_winner(final_df)
+    print(final_df.value_counts(subset=['home_won_jumpball']))
+
     final_df.to_csv("data/filtered-jumpballs.csv", index=False)
+    final_df.sample(10, random_state=42).to_csv("src/data_processing/filtered-jumpballs-sample.csv", index=False)
 
 
 if __name__ == "__main__":

@@ -39,12 +39,78 @@ def plot_jumpballs_per_game_per_season(df):
 
 def chart_team_jumpball_player_variance(df):
     """
-    Chart the proportion of the number of jumpball events that go to top 1 player and top 3 players in a season, considering start-game and start-ot only.
+    Chart the proportion of the number of jumpball events that go to top players in a season, considering start-game and start-ot only.
+    Accounts for both athletes in each jumpball event.
 
-    Returns: Color coded table with teams on the left, season on the top, and the proportion of jumpball events that go to top 1 player and top 3 players in a season.
+    Returns: Filled bar for each team with proportion of each player who jumped for the team in that season.
     """
 
-    #next commit
+    start_mask = df['jumpball_type'].isin(["start-of-game", "start-ot"])
+    start_jumpballs = df[start_mask].copy()
+
+    # Create two dataframes - one for each athlete in the jumpball
+    athlete1 = start_jumpballs[['season', 'team_id_1', 'athlete_id_1']].rename(
+        columns={'team_id_1': 'team_id', 'athlete_id_1': 'athlete_id'}
+    ).dropna()
+    athlete2 = start_jumpballs[['season', 'team_id_2', 'athlete_id_2']].rename(
+        columns={'team_id_2': 'team_id', 'athlete_id_2': 'athlete_id'}
+    ).dropna()
+    
+    # Combine both athletes
+    all_athletes = pd.concat([athlete1, athlete2], ignore_index=True)
+    
+    # Count jumpballs per team per player per season
+    season_team_player_counts = all_athletes.groupby(['season', 'team_id', 'athlete_id']).size().reset_index(name='count')
+    
+    # Get totals per season per team
+    season_team_totals = all_athletes.groupby(['season', 'team_id']).size().reset_index(name='total')
+    
+    # Merge to calculate proportions per season
+    season_proportions = season_team_player_counts.merge(season_team_totals, on=['season', 'team_id'])
+    season_proportions['proportion'] = season_proportions['count'] / season_proportions['total']
+    
+    # Rank players by proportion within each season and team (highest proportion = rank 1)
+    season_proportions['rank'] = season_proportions.groupby(['season', 'team_id'])['proportion'].rank(method='first', ascending=False).astype(int)
+    
+    # Create all possible combinations of team, season, and rank per team (only for ranks that team has)
+    season_proportions_filled_list = []
+    
+    for team in season_proportions['team_id'].unique():
+        team_data = season_proportions[season_proportions['team_id'] == team]
+        all_seasons = team_data['season'].unique()
+        all_ranks = team_data['rank'].unique()
+        
+        # Create combinations for this team only
+        team_index = pd.MultiIndex.from_product([all_seasons, [team], all_ranks], names=['season', 'team_id', 'rank'])
+        team_full_df = pd.DataFrame(index=team_index).reset_index()
+        
+        # Merge with actual proportions for this team
+        team_filled = team_full_df.merge(team_data[['season', 'team_id', 'rank', 'proportion']], 
+                                         on=['season', 'team_id', 'rank'], how='left')
+        team_filled['proportion'] = team_filled['proportion'].fillna(0)
+        season_proportions_filled_list.append(team_filled)
+    
+    season_proportions_filled = pd.concat(season_proportions_filled_list, ignore_index=True)
+    
+    # Average proportions across seasons for each team/rank
+    rank_proportions = season_proportions_filled.groupby(['team_id', 'rank'])['proportion'].mean().reset_index()
+
+    # Plotting - stacked bar chart
+    pivot_data = rank_proportions.pivot_table(
+        index='team_id',
+        columns='rank',
+        values='proportion',
+        fill_value=0
+    )
+    
+    plt.figure(figsize=(14, 6))
+    pivot_data.plot(kind='bar', stacked=True, ax=plt.gca(), width=0.7, legend=False)
+    plt.title('Jumpball Player Distribution by Team (Start-of-Game & Start-OT)')
+    plt.xlabel('Team ID')
+    plt.ylabel('Proportion')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig("data/team_jumpball_player_variance.png", dpi=150, bbox_inches='tight')
     
 
 
@@ -53,7 +119,8 @@ def main():
     df = pd.read_csv("data/filtered-jumpballs.csv")
 
 
-    plot_jumpballs_per_game_per_season(df)
+    # plot_jumpballs_per_game_per_season(df)
+    chart_team_jumpball_player_variance(df)
 
 
 if __name__ == "__main__":
