@@ -111,6 +111,54 @@ def chart_team_jumpball_player_variance(df):
     plt.xticks(rotation=45)
     plt.tight_layout()
     plt.savefig("data/team_jumpball_player_variance.png", dpi=150, bbox_inches='tight')
+
+
+def chart_team_jumpball_winrate(df):
+    """
+    Chart the proportion of jumpball events won by each team in a season, considering start-game and start-ot only.
+    Accounts for both athletes in each jumpball event.
+
+    Returns: Heatmap with teams on rows and seasons on columns, showing win proportions.
+    """
+
+    start_mask = df['jumpball_type'].isin(["in-game"])
+    start_jumpballs = df[start_mask].copy()
+
+    # Count jumpballs won per team per season
+    team_wins = start_jumpballs.groupby(['season', 'jumpball_winner_team']).size().reset_index(name='wins')
+    
+    # Count total jumpballs per team per season
+    team_losses = start_jumpballs.groupby(['season', 'jumpball_loser_team']).size().reset_index(name='losses')
+    
+    # Merge to calculate win proportions
+    team_win_proportions = team_wins.merge(team_losses, left_on=['season', 'jumpball_winner_team'], right_on=['season', 'jumpball_loser_team'], how='left')
+    team_win_proportions['losses'] = team_win_proportions['losses'].fillna(0)
+    team_win_proportions['proportion'] = team_win_proportions['wins'] / (team_win_proportions['wins'] + team_win_proportions['losses'])
+    
+    # Pivot data for heatmap: teams as rows, seasons as columns
+    heatmap_data = team_win_proportions.pivot_table(
+        index='jumpball_winner_team',
+        columns='season',
+        values='proportion'
+    )
+    
+    # Create heatmap with red (0) -> white (0.5) -> green (1) gradient
+    plt.figure(figsize=(12, 8))
+    sns.heatmap(
+        heatmap_data,
+        cmap='RdYlGn',
+        center=0.5,
+        vmin=0,
+        vmax=1,
+        cbar_kws={'label': 'Win Proportion'},
+        linewidths=0.5,
+        linecolor='gray'
+    )
+    plt.title('Jumpball Win Rate by Team and Season')
+    plt.xlabel('Season')
+    plt.ylabel('Team')
+    plt.tight_layout()
+    plt.savefig("data/team_jumpball_winrate.png", dpi=150, bbox_inches='tight')
     
 
 
@@ -120,7 +168,8 @@ def main():
 
 
     # plot_jumpballs_per_game_per_season(df)
-    chart_team_jumpball_player_variance(df)
+    # chart_team_jumpball_player_variance(df)
+    chart_team_jumpball_winrate(df)
 
 
 if __name__ == "__main__":
