@@ -38,7 +38,7 @@ src/
 **Data Processing** (`src/data_processing/`):
 - `jumpball_pbp.py`: Downloads NBA play-by-play data from SportsDataverse and extracts jumpball events (seasons 2002-2026). Classifies jumpballs as start-of-game, start-of-overtime, or in-game. Output: `data/jumpballs.csv`
 - `player_data.py`: Loads and processes player metadata (height, weight, position)
-- `filter_jumpball_data.py`: Cleans jumpball data by removing violations, deduplicating sparse rows, and enriching with player/team metadata. Output: `data/filtered-jumpballs.csv`
+- `filter_jumpball_data.py`: Cleans jumpball data by removing violations, deduplicating sparse rows, and enriching with player/team metadata and win probability leverage values. Output: `data/filtered-jumpballs.csv`
 
 **Data Exploration** (`src/data_exploration/`): Inspects, cleans, and visualizes jumpball data. Detects data quality issues, removes duplicates and anomalies, and generates analysis visualizations.
 
