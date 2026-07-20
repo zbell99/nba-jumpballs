@@ -243,7 +243,7 @@ def merge_win_prob_data(df):
     )
 
     df['wp_leverage'] = round(df['oob_challenge'] / 2, 4)
-    df = df.drop(columns=['gt', 'm', 'line', 'oob_challenge', 'time_elapsed', 'time_rounded', 'score_diff_clipped', 'spread_clipped'])
+    df = df.drop(columns=['gt', 'm', 'line', 'oob_challenge', 'spread_clipped'])
     
     return df
 

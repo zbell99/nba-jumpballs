@@ -269,7 +269,102 @@ def chart_positional_jumpball_winrate(df):
     plt.title('Positional Jumpball Analysis (Aggregated Across All Seasons)', 
               fontsize=14, weight='bold', pad=20)
     plt.savefig("data/positional_jumpball_winrate.png", dpi=150, bbox_inches='tight')
-    print("\nTable saved to data/positional_jumpball_winrate.png")   
+    print("\nTable saved to data/positional_jumpball_winrate.png")
+
+
+def scatterplot_jumpball_leverage(df):
+    """
+    Create a scatter plot of time (x) vs margin (y) for each jumpball event. The hue of the scatter plot should be the wp_leverage
+    Uses aggregated bins with dot size representing density.
+    """
+    start_mask = df['jumpball_type'].isin(["in-game"])
+    data = df[start_mask].copy()
+
+    # Create bins for aggregation
+    data['time_bin'] = pd.cut(data['time_elapsed'], bins=48)
+    data['margin_bin'] = pd.cut(data['score_diff'], bins=30)
+    
+    # Aggregate: count points in each bin and calculate mean wp_leverage
+    aggregated = data.groupby(['time_bin', 'margin_bin']).agg({
+        'wp_leverage': 'mean',
+        'time_elapsed': 'mean',
+        'score_diff': 'mean'
+    }).reset_index()
+    
+    # Count points per bin
+    counts = data.groupby(['time_bin', 'margin_bin']).size().reset_index(name='count')
+    aggregated = aggregated.merge(counts, on=['time_bin', 'margin_bin'])
+
+    plt.figure(figsize=(10, 6))
+    scatter = plt.scatter(aggregated['time_elapsed'], aggregated['score_diff'], 
+                         s=aggregated['count']*2, c=aggregated['wp_leverage'],
+                         alpha=0.6, edgecolors='black', linewidth=0.5)
+    plt.title('In-Game Jumpball Leverage (Aggregated by Density)')
+    plt.xlabel('Time Elapsed (seconds)')
+    plt.ylabel('Score Differential')
+    
+    # Add quarter boundary lines
+    for t in [0, 720, 1440, 2160, 2880]:
+        plt.axvline(x=t, color='gray', linestyle=':', linewidth=0.8, alpha=0.7)
+    
+    cbar = plt.colorbar(scatter)
+    cbar.set_label('WP Leverage')
+    plt.tight_layout()
+    plt.savefig("data/jumpball_leverage.png", dpi=150, bbox_inches='tight')
+
+
+def chart_tipoff_leverages(df):
+    """
+    PNG Table with only two values: the average wp_leverage for start-of-game jumpballs and the average wp_leverage for start-of-ot jumpballs.
+    """
+    start_game_mask = df['jumpball_type'] == "start-of-game"
+    start_ot_mask = df['jumpball_type'] == "start-of-ot"
+
+    start_game_leverage = str(round(df[start_game_mask]['wp_leverage'].mean()*100, 2))+" %"
+    start_ot_leverage = str(round(df[start_ot_mask]['wp_leverage'].mean()*100, 2))+" %"
+
+    leverage_table = pd.DataFrame({
+        'Jumpball Type': ['Start of Game', 'Start of OT'],
+        'WP Leverage': [start_game_leverage, start_ot_leverage]
+    })
+
+    # Create table image
+    fig, ax = plt.subplots(figsize=(8, 2.5))
+    ax.axis('tight')
+    ax.axis('off')
+
+    table = ax.table(cellText=leverage_table.values, colLabels=leverage_table.columns, 
+                     cellLoc='center', loc='center', colWidths=[0.3, 0.3])
+    table.auto_set_font_size(False)
+    table.set_fontsize(13)
+    table.scale(1, 2.5)
+    
+    # Style header row
+    for i in range(len(leverage_table.columns)):
+        table[(0, i)].set_facecolor('#2C3E50')
+        table[(0, i)].set_text_props(weight='bold', color='white', size=13)
+        table[(0, i)].set_height(0.16)
+    
+    # Style data rows with alternating colors and borders
+    for i in range(1, len(leverage_table) + 1):
+        for j in range(len(leverage_table.columns)):
+            if i % 2 == 0:
+                table[(i, j)].set_facecolor('#ECF0F1')
+            else:
+                table[(i, j)].set_facecolor('#FFFFFF')
+            table[(i, j)].set_edgecolor('#BDC3C7')
+            table[(i, j)].set_linewidth(0.25)
+            table[(i, j)].set_height(0.16)
+    
+    # Set header border
+    for i in range(len(leverage_table.columns)):
+        table[(0, i)].set_edgecolor('#1A252F')
+        table[(0, i)].set_linewidth(1.5)
+
+    plt.title('Jumpball Leverage', fontsize=15, weight='bold', pad=20)
+    plt.savefig("data/tipoff_leverages.png", dpi=150, bbox_inches='tight')
+    print("\nTable saved to data/tipoff_leverages.png")
+
 
 def main():
     df = pd.read_csv("data/filtered-jumpballs.csv")
@@ -278,7 +373,9 @@ def main():
     # plot_jumpballs_per_game_per_season(df)
     # chart_team_jumpball_player_variance(df)
     # chart_team_jumpball_winrate(df)
-    chart_positional_jumpball_winrate(df)
+    # chart_positional_jumpball_winrate(df)
+    # scatterplot_jumpball_leverage(df)
+    chart_tipoff_leverages(df)
 
 
 if __name__ == "__main__":
