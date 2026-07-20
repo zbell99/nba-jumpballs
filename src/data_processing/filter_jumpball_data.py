@@ -294,6 +294,47 @@ def determine_jumpball_winner(df):
     return df
 
 
+def perspective_from_team_1(df):
+    """
+    Reorient score and spread fields to be from team_1's perspective.
+    
+    Creates:
+    - team_1_jumpball_win: True if team_1 won, False if team_2 won, None if unknown
+    - team_1_score_diff: team_1's score minus team_2's score
+    - team_1_spread: spread from team_1's perspective (negated if team_1 is away team)
+    """
+    def calc_team_1_jumpball_win(row):
+        if pd.isna(row['athlete_id_3']):
+            return None
+        if row['team_id_3'] == row['team_id_1']:
+            return True
+        elif row['team_id_3'] == row['team_id_2']:
+            return False
+        return None
+    
+    def calc_team_1_score_diff(row):
+        if row['team_id_1'] == row['home_team_id']:
+            return row['home_score'] - row['away_score']
+        elif row['team_id_2'] == row['home_team_id']:
+            return row['away_score'] - row['home_score']
+        else:
+            return None  # If neither team_1 nor team_2 is the home team, return None
+    
+    def calc_team_1_spread(row):
+        if row['team_id_1'] == row['home_team_id']:
+            return row['home_team_spread']
+        elif row['team_id_1'] == row['away_team_id']:
+            return -row['home_team_spread']
+        else:
+            return None
+    
+    df['team_1_jumpball_win'] = df.apply(calc_team_1_jumpball_win, axis=1)
+    df['team_1_score_diff'] = df.apply(calc_team_1_score_diff, axis=1)
+    df['team_1_spread'] = df.apply(calc_team_1_spread, axis=1)
+    
+    return df
+
+
 def main():
     jumpball_df = pd.read_csv(JUMPBALL_DATA_PATH)
     player_data = pd.read_csv(PLAYER_DATA_PATH)
@@ -327,6 +368,8 @@ def main():
 
     final_df = determine_jumpball_winner(final_df)
     print(final_df.value_counts(subset=['home_won_jumpball']))
+
+    final_df = perspective_from_team_1(final_df)
 
     final_df.to_csv("data/filtered-jumpballs.csv", index=False)
     final_df.sample(10, random_state=42).to_csv("src/data_processing/filtered-jumpballs-sample.csv", index=False)
