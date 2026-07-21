@@ -18,7 +18,7 @@ from src.helpers.plotting_helpers import feature_importance_table, plot_auc_curv
 DATA_PATH = "data/filtered-jumpballs.csv"
 
 # Grid search configuration
-FEATURE_POOL = ['height_diff', 'weight_diff', 'time_elapsed', 'team_1_score_diff']
+FEATURE_POOL = ['height_diff', 'weight_diff', 'time_elapsed', 'team_1_score_diff', 'height_weight_interaction', 'height_time_interaction', 'weight_time_interaction']
 MIN_FEATURES = 2
 MAX_FEATURES = 4
 
@@ -51,6 +51,28 @@ def clean_data(df):
     #4. simplify the dataframe to only include the following columns: 'team_1_jumpball_win', 'height_diff', 'weight_diff', 'time_elapsed', 'team_1_score_diff'
     df = df[['season', 'home_team_id', 'away_team_id', 'team_1_jumpball_win', 'height_diff', 'weight_diff', 'time_elapsed', 'team_1_score_diff', 'wp_leverage', 'jumpball_type']]
     
+    return df
+
+
+def standardize_features(df, feature_columns):
+    """Standardize the specified feature columns in the dataframe."""
+    for col in feature_columns:
+        mean = df[col].mean()
+        std = df[col].std()
+        df[f"{col}_std"] = (df[col] - mean) / std
+    return df
+
+
+def enhance_data(df):
+    #1. interaction terms
+    df['height_weight_interaction'] = df['height_diff'] * df['weight_diff']
+    df['height_time_interaction'] = df['height_diff'] * df['time_elapsed']
+    df['weight_time_interaction'] = df['weight_diff'] * df['time_elapsed']
+
+    df['height_weight_interaction_std'] = df['height_diff_std'] * df['weight_diff_std']
+    df['height_time_interaction_std'] = df['height_diff_std'] * df['time_elapsed']
+    df['weight_time_interaction_std'] = df['weight_diff_std'] * df['time_elapsed']
+
     return df
 
 
@@ -226,7 +248,7 @@ def export_results(results, output_dir, generate_visualizations=True):
         if model_name in results:
             features = results[model_name].get('Features')
             if features is not None:
-                importance_df = feature_importance_table(results[model_name], features)
+                importance_df = feature_importance_table(results[model_name], features, model_name, output_dir)
                 importance_csv = f"{output_dir}/{model_name.lower().replace(' ', '_')}_feature_importance.csv"
                 importance_df.to_csv(importance_csv, index=False)
                 print(f"\n{model_name} Feature Importance:")
@@ -441,16 +463,17 @@ def main():
     # Set random seed for reproducibility
     RANDOM_STATE = 170
     np.random.seed(RANDOM_STATE)
+    target = 'team_1_jumpball_win'
     
     df = pd.read_csv(DATA_PATH)
     df = clean_data(df)
+    df = class_balancer(df, target_column=target, random_state=RANDOM_STATE)
+    df = standardize_features(df, ['height_diff', 'weight_diff', 'team_1_score_diff']) 
+    df = enhance_data(df)
 
     nets_test_df = split_specific_team_season(df, season=2025, team_id=17) # Brooklyn Nets team_id
     filtered_df = df.drop(nets_test_df.index) # Remove Nets test data from the main dataframe
     train_df, val_df, test_df = split_data(filtered_df, split=[0.7, 0.15, 0.15], random_state=RANDOM_STATE)
-    
-    target = 'team_1_jumpball_win'
-    train_df = class_balancer(train_df, target_column=target, random_state=RANDOM_STATE)
     
     # Setup output
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -1,3 +1,4 @@
+import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -5,25 +6,25 @@ from sklearn.tree import plot_tree
 from sklearn.metrics import roc_curve, auc
 
 
-def feature_importance_table(results, feature_names):
-    """Extract feature importance from all models."""
+def feature_importance_table(model_result, feature_names, model_name, output_dir):
+    """Extract feature importance from a model result dict. Load from pickle if needed."""
     importance_data = {'Feature': feature_names}
     
-    # Logistic Regression - use absolute coefficient values from statsmodels
-    if 'Logistic Regression' in results:
-        lr_model = results['Logistic Regression']['Model']
-        # Skip the first coefficient (intercept/const)
-        importance_data['Logistic Regression'] = np.abs(lr_model.params[1:].values)
+    # Try to get model from results dict, fall back to pickle file
+    if 'Model' in model_result:
+        model = model_result['Model']
+    else:
+        model_file = f"{output_dir}/{model_name.lower().replace(' ', '_')}_model.pkl"
+        with open(model_file, "rb") as f:
+            model = pickle.load(f)
     
-    # CART - use built-in feature_importances_
-    if 'CART' in results:
-        cart_model = results['CART']['Model']
-        importance_data['CART'] = cart_model.feature_importances_
-    
-    # XGBoost - use built-in feature_importances_
-    if 'XGBoost' in results:
-        xgb_model = results['XGBoost']['Model']
-        importance_data['XGBoost'] = xgb_model.feature_importances_
+    # Extract importance based on model type
+    if hasattr(model, 'params'):
+        # statsmodels logistic regression
+        importance_data['Importance'] = np.abs(model.params[1:].values)
+    elif hasattr(model, 'feature_importances_'):
+        # sklearn models (CART, XGBoost)
+        importance_data['Importance'] = model.feature_importances_
     
     importance_df = pd.DataFrame(importance_data)
     return importance_df
