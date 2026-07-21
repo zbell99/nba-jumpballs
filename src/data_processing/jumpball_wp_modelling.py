@@ -49,7 +49,7 @@ def clean_data(df):
     df['weight_diff'] = df['athlete_draft_weight_1'] - df['athlete_draft_weight_2']
 
     #4. simplify the dataframe to only include the following columns: 'team_1_jumpball_win', 'height_diff', 'weight_diff', 'time_elapsed', 'team_1_score_diff'
-    df = df[['season', 'home_team_id', 'away_team_id', 'team_1_jumpball_win', 'height_diff', 'weight_diff', 'time_elapsed', 'team_1_score_diff']]
+    df = df[['season', 'home_team_id', 'away_team_id', 'team_1_jumpball_win', 'height_diff', 'weight_diff', 'time_elapsed', 'team_1_score_diff', 'wp_leverage', 'jumpball_type']]
     
     return df
 
@@ -350,6 +350,93 @@ def build_cart_candidates(feature_combos, target, train_df, val_df, test_df, ran
     return candidates, best
 
 
+def sensitivity_analysis(results, nets_test_df, output_dir):
+    """
+    Conduct sensitivity analysis on nets test set using the best model.
+    Calculate expected win probability gains if jump ball win probabilities increased by 5%, 10%, 20%.
+    
+    Expected leverage = p*leverage - (1-p)*leverage, where p is win probability.
+    """
+    target = results['Target']
+    
+    # Identify best model based on validation accuracy
+    best_model_name = None
+    best_val_acc = -1
+    for model_name in ['Logistic Regression', 'XGBoost', 'CART']:
+        if model_name in results:
+            val_acc = results[model_name]['Validation Accuracy']
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                best_model_name = model_name
+    
+    if best_model_name is None:
+        print("No valid models found for sensitivity analysis")
+        return None
+    
+    print(f"\n{'='*80}")
+    print(f"SENSITIVITY ANALYSIS - Using best model: {best_model_name} (Val Acc: {best_val_acc:.4f})")
+    print(f"{'='*80}\n")
+    
+    # Get best model info
+    features = results[best_model_name]['Features']
+    model = results[best_model_name]['Model']
+    
+    # Limit to in-game jump balls only for sensitivity analysis, since start-of-game and start-of-OT jump balls are more practiced
+    nets_test_df = nets_test_df[nets_test_df['jumpball_type'] == 'in-game']
+
+    # Prepare nets test data
+    X_nets = nets_test_df[features]
+    
+    # Generate predictions on nets test set
+    if best_model_name == 'Logistic Regression':
+        X_nets_sm = sm.add_constant(X_nets)
+        predicted_probs = model.predict(X_nets_sm).values
+    else:
+        predicted_probs = model.predict_proba(X_nets)[:, 1]
+    
+    # Get leverage values
+    leverage = nets_test_df['wp_leverage'].values
+    
+    # Calculate expected leverage at different probability levels
+    scenarios = {
+        'Current': predicted_probs,
+        '+5%': np.clip(predicted_probs + 0.05, 0, 1),
+        '+10%': np.clip(predicted_probs + 0.10, 0, 1),
+        '+20%': np.clip(predicted_probs + 0.20, 0, 1),
+    }
+    
+    results_summary = []
+    for scenario_name, probs in scenarios.items():
+        # Expected leverage = p*leverage - (1-p)*leverage = leverage*(2p - 1)
+        expected_leverage = leverage * (2 * probs - 1)
+        total_expected_wp = expected_leverage.sum()
+        avg_expected_wp = expected_leverage.mean()
+        
+        results_summary.append({
+            'Scenario': scenario_name,
+            'Total Expected Win Prob Gain': round(total_expected_wp, 4),
+            'Avg Expected Win Prob Gain': round(avg_expected_wp, 4),
+            'In-Game Jump Balls': len(nets_test_df),
+        })
+    
+    sensitivity_df = pd.DataFrame(results_summary)
+    
+    # Calculate gains relative to current scenario
+    current_total = sensitivity_df.iloc[0]['Total Expected Win Prob Gain']
+    sensitivity_df['Wins Added'] = round(sensitivity_df['Total Expected Win Prob Gain'] - current_total, 2)
+    
+    print("Sensitivity Analysis Results (Nets 2025):")
+    print(sensitivity_df.to_string(index=False))
+    
+    # Save to CSV
+    os.makedirs(output_dir, exist_ok=True)
+    sensitivity_csv = f"{output_dir}/sensitivity_analysis.csv"
+    sensitivity_df.to_csv(sensitivity_csv, index=False)
+    print(f"\nSensitivity analysis saved to: {sensitivity_csv}")
+    
+    return sensitivity_df
+
+
 def main():
     # Set random seed for reproducibility
     RANDOM_STATE = 170
@@ -421,6 +508,8 @@ def main():
         print(f"ERROR exporting results: {e}")
     
     print(f"\nResults saved to: {output_dir}")
+
+    sensitivity_table = sensitivity_analysis(results, nets_test_df, output_dir)
 
 
 if __name__ == "__main__":

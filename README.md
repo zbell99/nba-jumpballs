@@ -54,6 +54,8 @@ src/
 - Candidate tracking: Exports CSVs for all candidate models per type
 - Visualization: Feature importance, AUC curves, and decision tree diagrams for best models
 
+- **Sensitivity analysis**: Quantifies expected win probability gains if jump ball win probability improved by 5%, 10%, 20%.
+
 ## Usage
 
 ```bash
