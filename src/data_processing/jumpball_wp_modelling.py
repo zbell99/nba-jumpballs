@@ -2,6 +2,7 @@ import json
 import pickle
 import os
 from datetime import datetime
+from itertools import combinations
 
 import pandas as pd
 import numpy as np
@@ -15,6 +16,25 @@ from src.helpers.plotting_helpers import feature_importance_table, plot_auc_curv
 
 
 DATA_PATH = "data/filtered-jumpballs.csv"
+
+# Grid search configuration
+FEATURE_POOL = ['height_diff', 'weight_diff', 'time_elapsed', 'team_1_score_diff']
+MIN_FEATURES = 2
+MAX_FEATURES = 4
+
+HYPERPARAMETERS = {
+    'XGBoost': [
+        {'max_depth': 3, 'learning_rate': 0.1, 'n_estimators': 100},
+        {'max_depth': 3, 'learning_rate': 0.05, 'n_estimators': 100},
+        {'max_depth': 5, 'learning_rate': 0.1, 'n_estimators': 100},
+        {'max_depth': 5, 'learning_rate': 0.05, 'n_estimators': 100},
+    ],
+    'CART': [
+        {'max_depth': 3, 'min_samples_split': 100, 'min_samples_leaf': 50},
+        {'max_depth': 5, 'min_samples_split': 50, 'min_samples_leaf': 20},
+        {'max_depth': 7, 'min_samples_split': 30, 'min_samples_leaf': 10},
+    ],
+}
 
 def clean_data(df):
     #1. strip rows with missing values in the 'athlete_id_1' and 'athlete_id_2' and 'athlete_id_3' columns
@@ -73,7 +93,12 @@ def split_data(df, split=[0.7, 0.15, 0.15], random_state=170):
     return train_df, val_df, test_df
 
 
-def run_modeling_suite(regressors, target, train_df, val_df, test_df):
+def run_modeling_suite(regressors, target, train_df, val_df, test_df, xgb_hyperparams=None, cart_hyperparams=None):
+    if xgb_hyperparams is None:
+        xgb_hyperparams = {'max_depth': 3, 'random_state': 170}
+    if cart_hyperparams is None:
+        cart_hyperparams = {'random_state': 170, 'max_depth': 3, 'min_samples_split': 100, 'min_samples_leaf': 50}
+    
     X_train = train_df[regressors]
     y_train = train_df[target]
 
@@ -92,10 +117,10 @@ def run_modeling_suite(regressors, target, train_df, val_df, test_df):
     results['Features'] = regressors
     results['Target'] = target
     results['Logistic Regression'] = build_logistic_regression_statsmodels(datasets)
-    results['XGBoost'] = build_model_sklearn(xgb.XGBClassifier(max_depth=3, random_state=170), datasets)
-    results['CART'] = build_model_sklearn(DecisionTreeClassifier(random_state=170, max_depth=3, min_samples_split=100, min_samples_leaf=50), datasets)
+    results['XGBoost'] = build_model_sklearn(xgb.XGBClassifier(**xgb_hyperparams), datasets)
+    results['CART'] = build_model_sklearn(DecisionTreeClassifier(**cart_hyperparams), datasets)
     
-    export_results(results, train_df)
+    return results
 
 
 def build_model_sklearn(model, datasets):
@@ -165,14 +190,11 @@ def build_logistic_regression_statsmodels(datasets):
 
 
 
-def export_results(results, train_df):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = f"models/wp/{timestamp}"
+def export_results(results, output_dir, generate_visualizations=True):
     os.makedirs(output_dir, exist_ok=True)
     
     # Prepare metrics dict (exclude model objects for JSON)
     metrics = {}
-    metrics['Features'] = results.get('Features')
     metrics['Target'] = results.get('Target')
     
     for model_name in ['Logistic Regression', 'XGBoost', 'CART']:
@@ -188,7 +210,7 @@ def export_results(results, train_df):
             with open(model_file, "wb") as f:
                 pickle.dump(model, f)
     
-    # Generate and save logistic regression coefficient table and R^2
+    # Generate and save logistic regression coefficient table
     if 'Logistic Regression' in results:
         lr_model = results['Logistic Regression']['Model']
         
@@ -199,27 +221,133 @@ def export_results(results, train_df):
         print("\nLogistic Regression Coefficients:")
         print(coef_df.to_string(index=False))
     
-    # Generate and save feature importance table
-    importance_df = feature_importance_table(results, results['Features'])
-    importance_csv = f"{output_dir}/feature_importance.csv"
-    importance_df.to_csv(importance_csv, index=False)
-    print("\n\nFeature Importance:")
-    print(importance_df.to_string(index=False))
+    # Generate feature importance for each model
+    for model_name in ['Logistic Regression', 'XGBoost', 'CART']:
+        if model_name in results:
+            features = results[model_name].get('Features')
+            if features is not None:
+                importance_df = feature_importance_table(results[model_name], features)
+                importance_csv = f"{output_dir}/{model_name.lower().replace(' ', '_')}_feature_importance.csv"
+                importance_df.to_csv(importance_csv, index=False)
+                print(f"\n{model_name} Feature Importance:")
+                print(importance_df.to_string(index=False))
     
-    # Plot AUC curves for XGBoost and CART
-    print("\n\nGenerating AUC curves...")
-    plot_auc_curves(results, output_dir)
-    
-    # Visualize and save CART tree
-    if 'CART' in results:
-        cart_model = results['CART']['Model']
-        tree_path = f"{output_dir}/cart_tree.png"
-        visualize_cart_tree(cart_model, results['Features'], tree_path)
+    if generate_visualizations:
+        # Plot AUC curves
+        print("\n\nGenerating AUC curves...")
+        plot_auc_curves(results, output_dir)
+        
+        # Visualize and save CART tree
+        if 'CART' in results:
+            cart_model = results['CART']['Model']
+            cart_features = results['CART'].get('Features')
+            if cart_features is not None:
+                tree_path = f"{output_dir}/cart_tree.png"
+                visualize_cart_tree(cart_model, cart_features, tree_path)
     
     # Save metrics as JSON (handle NaN values)
     metrics_file = f"{output_dir}/results.json"
     with open(metrics_file, "w") as f:
         json.dump(metrics, f, indent=4, default=lambda x: None if isinstance(x, float) and np.isnan(x) else x)
+    
+    return output_dir
+
+
+def generate_feature_combinations(feature_pool, min_features, max_features):
+    """Generate all combinations of features within specified length range."""
+    combos = []
+    for length in range(min_features, max_features + 1):
+        combos.extend(list(combinations(feature_pool, length)))
+    return [list(combo) for combo in combos]
+
+
+def build_lr_candidates(feature_combos, target, train_df, val_df, test_df, random_state):
+    """Grid search for Logistic Regression."""
+    candidates = []
+    best = {'score': -1, 'results': None}
+    
+    for features in feature_combos:
+        datasets = {
+            "train": (train_df[features], train_df[target]),
+            "validation": (val_df[features], val_df[target]),
+            "test": (test_df[features], test_df[target]),
+        }
+        lr_results = build_logistic_regression_statsmodels(datasets)
+        lr_val_acc = lr_results['Validation Accuracy']
+        
+        candidates.append({
+            'Features': str(features),
+            'Hyperparameters': '{}',
+            'Val Accuracy': lr_val_acc,
+            'Test Accuracy': lr_results['Test Accuracy'],
+        })
+        
+        if lr_val_acc > best['score']:
+            best = {'score': lr_val_acc, 'results': (features, lr_results)}
+    
+    return candidates, best
+
+
+def build_xgb_candidates(feature_combos, target, train_df, val_df, test_df, random_state):
+    """Grid search for XGBoost."""
+    candidates = []
+    best = {'score': -1, 'results': None}
+    
+    for features in feature_combos:
+        datasets = {
+            "train": (train_df[features], train_df[target]),
+            "validation": (val_df[features], val_df[target]),
+            "test": (test_df[features], test_df[target]),
+        }
+        
+        for hparams in HYPERPARAMETERS['XGBoost']:
+            xgb_hparams = {**hparams, 'random_state': random_state}
+            model = xgb.XGBClassifier(**xgb_hparams)
+            xgb_results = build_model_sklearn(model, datasets)
+            xgb_val_acc = xgb_results['Validation Accuracy']
+            
+            candidates.append({
+                'Features': str(features),
+                'Hyperparameters': str(hparams),
+                'Val Accuracy': xgb_val_acc,
+                'Test Accuracy': xgb_results['Test Accuracy'],
+            })
+            
+            if xgb_val_acc > best['score']:
+                best = {'score': xgb_val_acc, 'results': (features, xgb_results)}
+    
+    return candidates, best
+
+
+def build_cart_candidates(feature_combos, target, train_df, val_df, test_df, random_state):
+    """Grid search for CART."""
+    candidates = []
+    best = {'score': -1, 'results': None}
+    
+    for features in feature_combos:
+        datasets = {
+            "train": (train_df[features], train_df[target]),
+            "validation": (val_df[features], val_df[target]),
+            "test": (test_df[features], test_df[target]),
+        }
+        
+        for hparams in HYPERPARAMETERS['CART']:
+            cart_hparams = {**hparams, 'random_state': random_state}
+            model = DecisionTreeClassifier(**cart_hparams)
+            cart_results = build_model_sklearn(model, datasets)
+            cart_val_acc = cart_results['Validation Accuracy']
+            
+            candidates.append({
+                'Features': str(features),
+                'Hyperparameters': str(hparams),
+                'Val Accuracy': cart_val_acc,
+                'Test Accuracy': cart_results['Test Accuracy'],
+            })
+            
+            if cart_val_acc > best['score']:
+                best = {'score': cart_val_acc, 'results': (features, cart_results)}
+    
+    return candidates, best
 
 
 def main():
@@ -234,10 +362,65 @@ def main():
     filtered_df = df.drop(nets_test_df.index) # Remove Nets test data from the main dataframe
     train_df, val_df, test_df = split_data(filtered_df, split=[0.7, 0.15, 0.15], random_state=RANDOM_STATE)
     
-    features = ['height_diff', 'weight_diff', 'time_elapsed', 'team_1_score_diff']
     target = 'team_1_jumpball_win'
     train_df = class_balancer(train_df, target_column=target, random_state=RANDOM_STATE)
-    run_modeling_suite(regressors=features, target=target, train_df=train_df, val_df=val_df, test_df=test_df)
+    
+    # Setup output
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = f"models/wp/{timestamp}"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Run grid search for each model type
+    feature_combos = generate_feature_combinations(FEATURE_POOL, MIN_FEATURES, MAX_FEATURES)
+    
+    lr_candidates, lr_best = build_lr_candidates(feature_combos, target, train_df, val_df, test_df, RANDOM_STATE)
+    xgb_candidates, xgb_best = build_xgb_candidates(feature_combos, target, train_df, val_df, test_df, RANDOM_STATE)
+    cart_candidates, cart_best = build_cart_candidates(feature_combos, target, train_df, val_df, test_df, RANDOM_STATE)
+    
+    # Save candidate CSVs
+    all_candidates = {
+        'Logistic Regression': lr_candidates,
+        'XGBoost': xgb_candidates,
+        'CART': cart_candidates,
+    }
+    
+    for model_name, candidates in all_candidates.items():
+        df_candidates = pd.DataFrame(candidates)
+        csv_file = f"{output_dir}/{model_name.lower().replace(' ', '_')}_candidates.csv"
+        df_candidates.to_csv(csv_file, index=False)
+        print(f"Saved {len(candidates)} {model_name} candidates to: {csv_file}")
+    
+    # Export best models with visualizations
+    print("\n" + "=" * 80)
+    best_models = {
+        'Logistic Regression': lr_best,
+        'XGBoost': xgb_best,
+        'CART': cart_best,
+    }
+    
+    # Build results dict with all three best models
+    results = {
+        'Target': target,
+    }
+    
+    for model_name, best in best_models.items():
+        if best['results']:
+            features, model_results = best['results']
+            # Add features to model results
+            model_results['Features'] = features
+            results[model_name] = model_results
+            print(f"{model_name}: {features} (Val Acc: {best['score']:.4f})")
+            
+        else:
+            print(f"No results found for {model_name}")
+    
+    # Export all best models once
+    try:
+        export_results(results, output_dir, generate_visualizations=True)
+    except Exception as e:
+        print(f"ERROR exporting results: {e}")
+    
+    print(f"\nResults saved to: {output_dir}")
 
 
 if __name__ == "__main__":
